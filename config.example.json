@@ -18,7 +18,8 @@
     "maxBytes": 8388608
   },
   "github": {
-    "enabled": false
+    "enabled": false,
+    "write": false
   },
   "repoAccess": {
     "enabled": true,

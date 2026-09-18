@@ -7,9 +7,9 @@
 import path from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { makeGuard, READ_ONLY_TOOLS, FORBIDDEN_TOOLS } from './guard.js';
-import { githubServer, GITHUB_TOOL_NAMES } from './github-tools.js';
+import { githubServer, GITHUB_READ_TOOLS, GITHUB_WRITE_TOOLS } from './github-tools.js';
 
-function systemPrompt(displayName, repoAllowed, githubEnabled) {
+function systemPrompt(displayName, repoAllowed, githubEnabled, githubWrite) {
   const lines = [
     'You are Claude, talking in a Discord channel.',
     '',
@@ -29,9 +29,18 @@ function systemPrompt(displayName, repoAllowed, githubEnabled) {
   if (githubEnabled) {
     lines.push(
       '',
-      'You also have read-only GitHub tools (mcp__github__*) for repos, files, code search,',
-      'issues and pull requests.'
+      'You also have GitHub tools for repos, files, code search, issues and pull requests.'
     );
+    if (githubWrite) {
+      lines.push(
+        'You can also propose changes: gh_create_branch, gh_commit_files and gh_open_pr.',
+        'The workflow is always the same -- branch, commit to that branch, open a PR. You',
+        'cannot commit to the default branch and you cannot merge; do not claim otherwise.',
+        'Read the existing file before rewriting it, and say what the PR contains.'
+      );
+    } else {
+      lines.push('These are read-only: you cannot commit, push or open pull requests.');
+    }
   }
   if (!repoAllowed && !githubEnabled) {
     lines.push(
@@ -57,6 +66,11 @@ export async function runAgent(opts) {
   const { cfg, prompt, displayName, sessionId, repoAllowed, extraRoots, maxBudgetUsd } = opts;
   const ra = cfg.repoAccess || {};
   const githubEnabled = Boolean(cfg.github && cfg.github.enabled && process.env.GITHUB_TOKEN);
+  // Write access rides on the same allowlist as repo access, by configuration.
+  const githubWrite = Boolean(githubEnabled && repoAllowed && cfg.github.write === true);
+  const ghTools = githubEnabled && repoAllowed
+    ? GITHUB_READ_TOOLS.concat(githubWrite ? GITHUB_WRITE_TOOLS : [])
+    : [];
 
   const repoPaths = repoAllowed ? Object.values(ra.repos || {}).map((p) => path.resolve(p)) : [];
   const readable = repoPaths.concat(extraRoots || []);
@@ -78,7 +92,7 @@ export async function runAgent(opts) {
     disallowedTools: FORBIDDEN_TOOLS,
     // `readable` is the complete set of directories for this specific request --
     // repo roots only when the asker is allowlisted, plus any attachment dir.
-    canUseTool: makeGuard(ra, readable, githubEnabled && repoAllowed),
+    canUseTool: makeGuard(ra, readable, ghTools),
     permissionMode: 'default',
     // 'host' routes decisions to canUseTool. 'none' would deny them outright,
     // so the guard would never get to allow a legitimate read.
@@ -86,11 +100,11 @@ export async function runAgent(opts) {
     // Do not inherit the host machine's CLAUDE.md / settings: a bot should
     // behave the same wherever it is deployed.
     settingSources: [],
-    systemPrompt: systemPrompt(displayName, repoAllowed, githubEnabled && repoAllowed),
+    systemPrompt: systemPrompt(displayName, repoAllowed, githubEnabled && repoAllowed, githubWrite),
   };
   if (typeof maxBudgetUsd === 'number') options.maxBudgetUsd = maxBudgetUsd;
   if (sessionId) options.resume = sessionId;
-  if (githubEnabled && repoAllowed) options.mcpServers = { github: githubServer() };
+  if (githubEnabled && repoAllowed) options.mcpServers = { github: githubServer(githubWrite) };
 
   let text = '';
   let cost = 0;

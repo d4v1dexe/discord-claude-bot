@@ -11,7 +11,9 @@ monthly Agent SDK credit** rather than pay-as-you-go API billing.
 - **Threads** — the first mention in a channel opens a thread, so long conversations don't
   flood the channel. Inside the thread you don't need to tag it again.
 - **Reads your repos** — real `Read`/`Grep`/`Glob`, fenced by an allowlist (see Security).
-- **Reads GitHub** — optional read-only tools for repos, files, code search, issues and PRs.
+- **Reads GitHub** — repos, files, code search, issues and PRs.
+- **Proposes changes on GitHub** — optional. Creates a branch, commits to it, opens a PR. It
+  cannot commit to the default branch and cannot merge.
 - **Reads attachments** — drop in an image or a file and ask about it.
 - **Spend caps** — per query, per user per day, and global per day, enforced before the call.
 - **Usage reporting** — a footer on each reply, `@bot usage` for the full picture.
@@ -124,15 +126,30 @@ which is why a short "hi" costs nearly as much as a real question.
 | `threads.enabled` | Open a thread on first mention. |
 | `threads.name` | Thread name prefix. |
 | `github.enabled` | Turn on GitHub tools (needs `GITHUB_TOKEN`). |
+| `github.write` | Allow branch/commit/PR tools. Off by default. Gated by the same allowlist as repo access. |
 | `repoAccess.allowedUserIds` | Discord user IDs allowed file and GitHub access. |
 | `repoAccess.repos` | Name → absolute path. Forward slashes on Windows. |
 
 ### GitHub token
 
 Create a **fine-grained** personal access token at
-<https://github.com/settings/personal-access-tokens>. Read-only is enough: *Contents:
-Read-only*, plus *Issues* and *Pull requests* read if you want those tools. Don't use a
-classic token with write scopes — the bot never writes.
+<https://github.com/settings/personal-access-tokens>, scoped to the specific repos you want
+the bot to see — not "all repositories".
+
+- `github.write: false` → *Contents: Read-only* is enough (plus *Issues* / *Pull requests*
+  read for those tools).
+- `github.write: true` → *Contents: Read and write* and *Pull requests: Read and write*.
+
+### What write mode can and cannot do
+
+| Can | Cannot |
+|---|---|
+| Create a branch | Commit to the default branch — refused before any API call |
+| Commit files to that branch | Merge a PR |
+| Open a pull request | Force-push, delete branches, edit releases |
+
+Every change lands as a PR you review in GitHub's UI. The default-branch check fetches the
+repo's actual default branch and compares, so renaming `main` doesn't open a hole.
 
 ## Switching to the raw Messages API
 

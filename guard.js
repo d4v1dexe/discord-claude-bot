@@ -62,16 +62,21 @@ function pathArg(toolName, input) {
  *   this request. Pass repo roots only when the asker is allowlisted.
  * @param {boolean} githubEnabled
  */
-export function makeGuard(cfg, readableRoots, githubEnabled) {
+export function makeGuard(cfg, readableRoots, allowedGithubTools) {
   const roots = (readableRoots || []).map((p) => path.resolve(p));
+  const ghAllowed = new Set(allowedGithubTools || []);
 
   return async function canUseTool(toolName, input) {
     if (FORBIDDEN_TOOLS.includes(toolName)) {
       return { behavior: 'deny', message: toolName + ' is not available to this bot.' };
     }
 
-    if (githubEnabled && toolName.startsWith('mcp__github__')) {
-      return { behavior: 'allow', updatedInput: input };
+    // GitHub tools are allowed by exact name, so a write tool can never slip
+    // through on a prefix match when only reads are enabled.
+    if (toolName.startsWith('mcp__github__')) {
+      return ghAllowed.has(toolName)
+        ? { behavior: 'allow', updatedInput: input }
+        : { behavior: 'deny', message: toolName + ' is not enabled for this bot.' };
     }
 
     if (!READ_ONLY_TOOLS.includes(toolName)) {
