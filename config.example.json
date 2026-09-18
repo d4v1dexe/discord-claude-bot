@@ -1,38 +1,58 @@
 {
   "model": "claude-opus-5",
   "effort": "medium",
-  "maxTurns": 20,
   "showUsageFooter": true,
-
-  "plan": "max5x",
-
   "caps": {
-    "perQueryUsd": 0.5,
     "perUserDailyUsd": 3,
-    "globalDailyUsd": 10
+    "globalDailyUsd": 5
   },
-
   "threads": {
     "enabled": true,
     "name": "claude",
     "autoArchiveMinutes": 1440
   },
-
   "attachments": {
     "maxBytes": 8388608
   },
-
   "github": {
     "enabled": false
   },
-
   "repoAccess": {
     "enabled": true,
-    "allowedUserIds": ["YOUR_DISCORD_USER_ID"],
+    "allowedUserIds": [
+      "YOUR_DISCORD_USER_ID"
+    ],
     "repos": {
       "example": "C:/path/to/your/repo"
     },
-    "denyNames": [".env", ".env.local", "id_rsa", "credentials.json", ".claude.json"],
-    "denyExtensions": [".pem", ".key", ".pfx", ".p12", ".crt"]
-  }
+    "denyNames": [
+      ".env",
+      ".env.local",
+      "id_rsa",
+      "credentials.json",
+      ".claude.json"
+    ],
+    "denyExtensions": [
+      ".pem",
+      ".key",
+      ".pfx",
+      ".p12",
+      ".crt"
+    ],
+    "maxFileBytes": 200000,
+    "skipDirs": [
+      "node_modules",
+      ".git",
+      "build",
+      "dist",
+      ".next",
+      "__pycache__",
+      "venv",
+      ".venv"
+    ]
+  },
+  "maxTokens": 8000,
+  "maxToolSteps": 8,
+  "historyExchanges": 6,
+  "monthlyBudgetUsd": 20
 }

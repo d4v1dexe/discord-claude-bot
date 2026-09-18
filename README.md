@@ -1,8 +1,12 @@
 # discord-claude-bot
 
-A Discord bot powered by the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk).
-It answers when you talk to it, can read your code, and runs on your **Claude plan's
-monthly Agent SDK credit** rather than pay-as-you-go API billing.
+A Discord bot powered by the Anthropic Messages API. It answers when you talk to it, reads
+your code, handles images, and tracks every cent it spends.
+
+Built deliberately on the raw API rather than the Claude Agent SDK. The SDK is lovely but
+ships Claude Code's entire harness -- about 28k tokens of system prompt and tool definitions
+on *every* call, measured at ~$0.28 per message. Defining a small tool set here puts the
+overhead near 1k tokens, so a message costs cents.
 
 ## Features
 
@@ -10,17 +14,17 @@ monthly Agent SDK credit** rather than pay-as-you-go API billing.
   in a thread it opened. Never `@everyone`, never keyword triggers, never other bots.
 - **Threads** — the first mention in a channel opens a thread, so long conversations don't
   flood the channel. Inside the thread you don't need to tag it again.
-- **Reads your repos** — real `Read`/`Grep`/`Glob`, fenced by an allowlist (see Security).
+- **Reads your repos** — list, read, regex-search and `git log`, fenced by an allowlist (see Security).
 - **Reads GitHub** — optional read-only tools for repos, files, code search, issues and PRs.
 - **Reads attachments** — drop in an image or a file and ask about it.
-- **Spend caps** — per query, per user per day, and global per day, enforced before the call.
+- **Spend caps** — per user per day, global per day, and a monthly budget, all enforced before the call.
 - **Usage reporting** — a footer on each reply, `@bot usage` for the full picture.
 
 ## Requirements
 
 - Node 18+
 - A Discord bot application
-- Either a Claude plan (Pro / Max) **or** an Anthropic API key
+- An Anthropic API key with credit
 
 ## Setup
 
@@ -33,32 +37,16 @@ cp .env.example .env
 ```
 
 Edit `.env` (Discord token; GitHub token only if you want GitHub tools) and `config.json`
-(your Discord user ID, your repo paths, your plan, your caps).
+(your Discord user ID, your repo paths, your budget, your caps).
 
-### Authentication — plan vs API key
+### Authentication
 
-**On your Claude plan (default).** Leave `ANTHROPIC_API_KEY` unset. The Agent SDK uses the
-login from Claude Code on the same machine. Sign in once:
+Get an API key at <https://console.anthropic.com> → API keys, add some credit, and put it in
+`.env` via `setup-env.ps1`. Billing is pay-as-you-go and separate from any Claude
+subscription.
 
-```bash
-claude
-```
-
-If you see `OAuth session expired and could not be refreshed`, your login lapsed — run
-`claude` and sign in again.
-
-Eligible plans get a monthly Agent SDK credit (Pro $20, Max 5x $100, Max 20x $200) separate
-from your normal plan usage. Set `plan` in `config.json` so the bot can report what's left.
-
-> **Read this before running it for a community.** Anthropic's guidance is that the
-> subscription credit is for *individual* experimentation and automation, and that credits
-> are per-user and non-transferable — teams running shared production automation are
-> directed to an API key instead. A bot answering a room full of people is closer to the
-> second thing than the first. For personal use this is fine; if you open it up, use an API
-> key. Check the current terms yourself rather than taking this README's word for it.
-
-**On an API key.** Put `ANTHROPIC_API_KEY` in `.env`. Pay-as-you-go, billed separately from
-any subscription. Same code, no other changes.
+Set `monthlyBudgetUsd` in `config.json` to whatever you topped up with; the bot tracks spend
+against it and refuses to go over.
 
 ### Run
 
@@ -68,17 +56,16 @@ npm start
 
 ## Security
 
-The bot hands Claude genuine file tools, so the guard matters. Every tool call goes through
-`canUseTool` in [`guard.js`](guard.js), which denies by default:
+The bot gives Claude real access to your disk, so the fencing matters. Every check lives in
+[`tools.js`](tools.js), inside the handlers themselves:
 
 | Rule | Effect |
 |---|---|
-| Tool allowlist | Only `Read`, `Grep`, `Glob` (+ `mcp__github__*` when enabled). |
-| Explicit blocks | `Bash`, `Write`, `Edit`, `NotebookEdit`, `Task`, `WebFetch`, `WebSearch`, `SlashCommand`. |
+| Small tool surface | Five read-only repo tools and six read-only GitHub tools. No shell, no write, no edit — those tools do not exist here. |
 | Path containment | Every path is resolved and must sit inside a configured repo. Traversal and absolute escapes are rejected, not clamped. |
 | Secrets denylist | `.env*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, `*.crt`, `id_rsa`, `credentials.json`, `.claude.json`. |
 | User allowlist | Repo and GitHub tools attach only for `repoAccess.allowedUserIds`. Everyone else gets a bot with no file access. |
-| No host settings | `settingSources: []` — it will not inherit your `CLAUDE.md` or local Claude settings. |
+| Unbypassable | Path checks live *inside* the tool handlers. There is no permission callback to shadow and no built-in file tool to fall back on. |
 
 **The allowlist is the whole security model.** Anyone on it can read any non-denied file in
 any configured repo, through Discord, and whatever they read lands in Discord's message
@@ -92,12 +79,15 @@ history. Keep it to people you would hand a terminal to, and add repos deliberat
 Footer on every reply:
 
 ```
-~$0.0143 | today $0.21/$3.00 | $87.40 of monthly credit left (87%)
+opus-5 | 2.1k in / 340 out | ~$0.0139 | $18.42 left of $20.00 (92%)
 ```
 
-`@bot usage` gives the full report. Costs are the Agent SDK's own estimate
-(`total_cost_usd`), not a billing statement. The "monthly credit left" figure assumes the
-`plan` you set in config — the authoritative balance is in your Claude account.
+`@bot usage` gives the full report: a budget bar, spend this month, an estimate of how many
+messages remain at your current average, token totals, per-user daily spend, and the live
+rate-limit window from the `anthropic-ratelimit-*` headers.
+
+Costs are computed from exact token counts at list prices. The authoritative balance is in
+the Anthropic Console.
 
 ## Configuration
 
@@ -105,9 +95,9 @@ Footer on every reply:
 |---|---|
 | `model` | Default `claude-opus-5`. |
 | `effort` | `low`/`medium`/`high`/`xhigh`/`max`. `medium` suits chat; raise for hard code questions. |
-| `maxTurns` | Max agent turns per message. |
-| `plan` | `pro`, `max5x`, `max20x`, or `none`. Only used to compute remaining credit. |
-| `caps.perQueryUsd` | Hard ceiling for one message, passed to the SDK as `maxBudgetUsd`. |
+| `maxToolSteps` | Max tool round-trips per message. |
+| `maxTokens` | Output cap per call, thinking included. |
+| `monthlyBudgetUsd` | Your top-up for the month. Drives the "left" figure and the hard stop. |
 | `caps.perUserDailyUsd` | Per-person daily ceiling. Checked before the call. |
 | `caps.globalDailyUsd` | Whole-bot daily ceiling. |
 | `threads.enabled` | Open a thread on first mention. |
