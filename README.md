@@ -86,11 +86,12 @@ The bot hands Claude genuine file tools, so the guard matters. Every tool call g
 
 | Rule | Effect |
 |---|---|
-| Tool allowlist | Only `Read`, `Grep`, `Glob` (+ `mcp__github__*` when enabled). |
-| Explicit blocks | `Bash`, `Write`, `Edit`, `NotebookEdit`, `Task`, `WebFetch`, `WebSearch`, `SlashCommand`. |
+| Tool allowlist | Only `Read`, `Grep`, `Glob`. GitHub tools are permitted by **exact name**, never by `mcp__github__` prefix, so a write tool cannot slip through when only reads are enabled. |
+| Explicit blocks | `Bash`, `BashOutput`, `KillShell`, `Write`, `Edit`, `NotebookEdit`, `Task`, `WebFetch`, `WebSearch`, `SlashCommand`. |
 | Path containment | Every path is resolved and must sit inside a configured repo. Traversal and absolute escapes are rejected, not clamped. |
+| Pathless searches | `Grep`/`Glob` with no `path` fall back to cwd. Denied outright for anyone with no readable roots, and cwd is an empty scratch dir rather than the bot's own folder. |
 | Secrets denylist | `.env*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, `*.crt`, `id_rsa`, `credentials.json`, `.claude.json`. |
-| User allowlist | Repo and GitHub tools attach only for `repoAccess.allowedUserIds`. Everyone else gets a bot with no file access. |
+| User allowlist | Repo and GitHub tools attach only for `repoAccess.allowedUserIds`. Everyone else gets a bot with no file access at all. |
 | No host settings | `settingSources: []` — it will not inherit your `CLAUDE.md` or local Claude settings. |
 
 **The allowlist is the whole security model.** Anyone on it can read any non-denied file in
