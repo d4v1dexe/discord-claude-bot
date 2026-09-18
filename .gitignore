@@ -4,3 +4,4 @@ node_modules/
 !.env.example
 usage.json
 config.json
+sessions.json

@@ -32,8 +32,21 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message],
 });
 
-// conversationKey (thread id or channel id) -> Agent SDK session id
+// conversationKey (thread id or channel id) -> Agent SDK session id.
+// Persisted, so a restart does not throw away every ongoing conversation.
+const SESSION_FILE = path.join(here, 'sessions.json');
 const sessions = new Map();
+try {
+  for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8')))) {
+    sessions.set(k, v);
+  }
+} catch { /* first run */ }
+
+function saveSessions() {
+  try {
+    fs.writeFileSync(SESSION_FILE, JSON.stringify(Object.fromEntries(sessions), null, 2));
+  } catch { /* never break a reply over bookkeeping */ }
+}
 
 const mayUseRepos = (userId) => {
   const ra = cfg.repoAccess || {};
@@ -90,14 +103,33 @@ function cleanup(dir) {
   }
 }
 
+// Did someone tag the bot's own integration role (<@&...>) rather than the bot
+// user (<@...>)? Discord shows both as "@claude_dc", so people use them
+// interchangeably. Only `managed` roles count -- those are created by Discord
+// for the bot itself, so this cannot fire on an ordinary role the bot happens
+// to share with humans, and never on @everyone or @here.
+function mentionsOurRole(message) {
+  try {
+    const me = message.guild && message.guild.members.me;
+    if (!me) return false;
+    return message.mentions.roles.some((r) => r.managed && me.roles.cache.has(r.id));
+  } catch {
+    return false;
+  }
+}
+
 // Should we answer this message at all?
 async function shouldHandle(message) {
   if (message.author.bot) return null;
-  const inOurThread =
-    message.channel.isThread && message.channel.isThread() && sessions.has(message.channel.id);
-  if (inOurThread) return 'thread';
 
-  if (message.mentions.users.has(client.user.id)) return 'mention';
+  // A thread we opened. Checked by ownership, not by in-memory state: the
+  // session map used to live only in memory, so restarting the bot silently
+  // orphaned every open thread.
+  if (message.channel.isThread && message.channel.isThread()) {
+    if (message.channel.ownerId === client.user.id) return 'thread';
+  }
+
+  if (message.mentions.users.has(client.user.id) || mentionsOurRole(message)) return 'mention';
 
   // Reply to something we said, without needing a fresh tag.
   if (message.reference && message.reference.messageId) {
@@ -188,7 +220,10 @@ client.on('messageCreate', async (message) => {
       clearInterval(typing);
     }
 
-    if (result.sessionId) sessions.set(convKey, result.sessionId);
+    if (result.sessionId) {
+      sessions.set(convKey, result.sessionId);
+      saveSessions();
+    }
     usage.record(userId, result.cost, result.modelUsage);
 
     let body = result.text;
@@ -235,7 +270,13 @@ client.once('clientReady', () => {
           : 'enabled but GITHUB_TOKEN is missing'
         : 'off')
   );
-  console.log('Triggers: @mention, replies to me, and threads I opened.');
+  console.log('Triggers: @mention (user or my own role), replies to me, threads I opened.');
+  console.log('Restored ' + sessions.size + ' saved thread session(s).');
+  for (const guild of client.guilds.cache.values()) {
+    const me = guild.members.me;
+    const managed = me ? me.roles.cache.filter((r) => r.managed).map((r) => '@' + r.name) : [];
+    console.log('  ' + guild.name + ': answers to ' + (managed.join(', ') || '(no managed role found)'));
+  }
 });
 
 client.login(process.env.DISCORD_TOKEN).catch((e) => {
