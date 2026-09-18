@@ -92,8 +92,19 @@ history. Keep it to people you would hand a terminal to, and add repos deliberat
 Footer on every reply:
 
 ```
-~$0.0143 | today $0.21/$3.00 | $87.40 of monthly credit left (87%)
+~$0.1147 | today $0.11/$1.50 | $18.69 of monthly credit left (93%)
 ```
+
+**Measured costs** (a real repo question, tools used):
+
+| Model | per message | messages per $20 |
+|---|---|---|
+| `claude-sonnet-5` (default) | ~$0.11 | ~180 |
+| `claude-opus-5` | ~$0.28 | ~70 |
+
+Most of that is fixed overhead: the Agent SDK sends Claude Code's system prompt and tool
+definitions (~28k tokens) on every call. Your actual question is a rounding error beside it,
+which is why a short "hi" costs nearly as much as a real question.
 
 `@bot usage` gives the full report. Costs are the Agent SDK's own estimate
 (`total_cost_usd`), not a billing statement. The "monthly credit left" figure assumes the
@@ -103,7 +114,7 @@ Footer on every reply:
 
 | Key | Meaning |
 |---|---|
-| `model` | Default `claude-opus-5`. |
+| `model` | Default `claude-sonnet-5`. `claude-opus-5` is sharper but ~2.5x the cost; `claude-haiku-4-5` is cheaper again. |
 | `effort` | `low`/`medium`/`high`/`xhigh`/`max`. `medium` suits chat; raise for hard code questions. |
 | `maxTurns` | Max agent turns per message. |
 | `plan` | `pro`, `max5x`, `max20x`, or `none`. Only used to compute remaining credit. |
@@ -122,6 +133,43 @@ Create a **fine-grained** personal access token at
 <https://github.com/settings/personal-access-tokens>. Read-only is enough: *Contents:
 Read-only*, plus *Issues* and *Pull requests* read if you want those tools. Don't use a
 classic token with write scopes — the bot never writes.
+
+## Switching to the raw Messages API
+
+A second build lives on the **`raw-api`** branch. It drops the Agent SDK and calls the
+Messages API directly with a small hand-written tool set, so the per-call overhead falls
+from ~28k tokens to ~1k:
+
+| | this branch (`main`) | `raw-api` branch |
+|---|---|---|
+| Billing | Claude plan's Agent SDK credit | pay-as-you-go API credit |
+| Cost per message | ~$0.11 (Sonnet) | ~$0.01-0.08 |
+| Messages per $20 | ~180 | ~250-900 |
+| Needs | a `claude` login | an API key with credit |
+
+The catch: **API credit is a different balance from your subscription.** The $20 Agent SDK
+credit that comes with a Claude plan cannot be spent through the Messages API, and it does
+not appear in the Anthropic Console. The Console's "Organization credits" is a separate
+wallet that starts at $0.00, and its "tier limit" is a spending ceiling, not a balance.
+
+To switch:
+
+1. Go to <https://console.anthropic.com> -> **Billing** -> **Add funds**. Whatever you add
+   is what you can spend; there is no free allowance.
+2. Create a key under **API keys**.
+3. Put it in `.env` as `ANTHROPIC_API_KEY` (run `setup-env.ps1`, which prompts with hidden
+   input rather than having you paste it anywhere visible).
+4. Check out the branch and install:
+
+   ```bash
+   git checkout raw-api
+   npm install
+   ```
+
+5. Set `monthlyBudgetUsd` in `config.json` to what you topped up. The bot tracks spend
+   against it and hard-stops at the limit.
+
+To come back, `git checkout main` and `npm install`.
 
 ## License
 
