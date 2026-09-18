@@ -147,9 +147,16 @@ export class Usage {
     this.state.months[month] = (this.state.months[month] || 0) + cost;
     this.state.requests += 1;
 
+    // Cached tokens are the bulk of the input on this SDK -- ~28k of harness per
+    // call, nearly all of it served from cache. Counting only `inputTokens`
+    // reported single-digit input against five-figure output, which is nonsense.
     for (const m of Object.values(modelUsage || {})) {
-      this.state.inputTokens += (m.inputTokens || m.input_tokens || 0);
-      this.state.outputTokens += (m.outputTokens || m.output_tokens || 0);
+      this.state.inputTokens += m.inputTokens || m.input_tokens || 0;
+      this.state.outputTokens += m.outputTokens || m.output_tokens || 0;
+      this.state.cacheReadTokens =
+        (this.state.cacheReadTokens || 0) + (m.cacheReadInputTokens || 0);
+      this.state.cacheWriteTokens =
+        (this.state.cacheWriteTokens || 0) + (m.cacheCreationInputTokens || 0);
     }
 
     // Keep the day map from growing forever.
@@ -183,8 +190,12 @@ export class Usage {
     const lines = [];
     lines.push('**Usage**');
     lines.push('Requests since ' + new Date(this.state.since).toLocaleDateString() + ': ' + this.state.requests);
+    const cacheRead = this.state.cacheReadTokens || 0;
+    const cacheWrite = this.state.cacheWriteTokens || 0;
     lines.push(
-      'Tokens: ' + compact(this.state.inputTokens) + ' in / ' + compact(this.state.outputTokens) + ' out'
+      'Tokens: ' + compact(this.state.inputTokens + cacheRead + cacheWrite) + ' in / ' +
+      compact(this.state.outputTokens) + ' out' +
+      (cacheRead ? '  (' + compact(cacheRead) + ' of the input served from cache)' : '')
     );
     lines.push('');
     lines.push('**This month** (' + monthKey() + ')');
