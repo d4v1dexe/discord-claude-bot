@@ -1,4 +1,19 @@
-# discord-claude-bot
+# discord-claude-bot &mdash; `raw-api` branch
+
+> **This is an alternative build, not work in progress.** It is complete and maintained.
+> The default branch [`main`](../../tree/main) is the one most people want.
+>
+> | | [`main`](../../tree/main) | `raw-api` (here) |
+> |---|---|---|
+> | Engine | Claude Agent SDK | Anthropic Messages API |
+> | Billing | your Claude plan's monthly Agent SDK credit | pay-as-you-go API credit you buy |
+> | Needs | `claude auth login` | an `ANTHROPIC_API_KEY` with money on it |
+> | Cost per message | ~$0.11 (Sonnet 5) | ~$0.01-0.08 |
+> | Messages per $20 | ~180 | ~250-900 |
+>
+> Pick this branch only if you would rather pay per message than be capped by the plan
+> credit. **API credit is a separate wallet from your Claude subscription** &mdash; the plan's
+> credit cannot be spent here, and it never appears in the Anthropic Console.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
