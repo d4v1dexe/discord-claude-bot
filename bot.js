@@ -149,7 +149,10 @@ client.on('messageCreate', async (message) => {
     const trigger = await shouldHandle(message);
     if (!trigger) return;
 
-    const raw = message.content.replace(/<@!?\d+>/g, ' ').replace(/\s+/g, ' ').trim();
+    // Strip user mentions (<@123>, <@!123>) AND role mentions (<@&123>). Missing
+    // the role form leaves a raw "<@&123>" in the prompt, which breaks the
+    // `usage` command and leaves the model puzzling over an unexplained role id.
+    const raw = message.content.replace(/<@[!&]?\d+>/g, ' ').replace(/\s+/g, ' ').trim();
     const displayName = message.member?.displayName || message.author.username;
     const userId = message.author.id;
 
