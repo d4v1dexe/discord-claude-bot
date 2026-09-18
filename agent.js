@@ -4,10 +4,23 @@
 // on a Claude plan's monthly Agent SDK credit instead of pay-as-you-go API
 // credit. It also brings real Read/Grep/Glob tools, so repo access is the
 // SDK's job and ours is only to fence it in -- see guard.js.
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { makeGuard, READ_ONLY_TOOLS, FORBIDDEN_TOOLS } from './guard.js';
 import { githubServer, GITHUB_READ_TOOLS, GITHUB_WRITE_TOOLS } from './github-tools.js';
+
+// A guaranteed-empty directory, for askers who may read nothing.
+function emptyDir() {
+  const d = path.join(os.tmpdir(), 'discord-claude-bot', 'empty');
+  try {
+    fs.mkdirSync(d, { recursive: true });
+  } catch {
+    /* if this fails the guard still denies every path */
+  }
+  return d;
+}
 
 function systemPrompt(displayName, repoAllowed, githubEnabled, githubWrite) {
   const lines = [
@@ -86,7 +99,10 @@ export async function runAgent(opts) {
     model: cfg.model,
     effort: cfg.effort || 'medium',
     maxTurns: cfg.maxTurns || 20,
-    cwd: readable[0] || process.cwd(),
+    // Never fall back to process.cwd(): that is the bot's own directory, which
+    // holds .env. For an asker with no readable roots, point at an empty
+    // scratch dir so a pathless tool call finds nothing worth having.
+    cwd: readable[0] || emptyDir(),
     additionalDirectories: readable.slice(1),
     allowedTools,
     disallowedTools: FORBIDDEN_TOOLS,

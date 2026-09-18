@@ -340,4 +340,3 @@ export const GITHUB_WRITE_TOOLS = [
   'mcp__github__gh_open_pr',
 ];
 
-export const GITHUB_TOOL_NAMES = GITHUB_READ_TOOLS.concat(GITHUB_WRITE_TOOLS);

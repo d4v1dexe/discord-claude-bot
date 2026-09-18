@@ -59,8 +59,9 @@ function pathArg(toolName, input) {
  *
  * @param {object} cfg  repoAccess config (denylists)
  * @param {string[]} readableRoots  the COMPLETE set of directories readable for
- *   this request. Pass repo roots only when the asker is allowlisted.
- * @param {boolean} githubEnabled
+ *   this request. Pass repo roots only when the asker is allowlisted. An empty
+ *   list means this asker may read nothing at all.
+ * @param {string[]} allowedGithubTools  exact mcp__github__* names to permit.
  */
 export function makeGuard(cfg, readableRoots, allowedGithubTools) {
   const roots = (readableRoots || []).map((p) => path.resolve(p));
@@ -84,8 +85,16 @@ export function makeGuard(cfg, readableRoots, allowedGithubTools) {
     }
 
     const raw = pathArg(toolName, input || {});
-    // Grep/Glob without an explicit path default to cwd, which is already a root.
-    if (!raw) return { behavior: 'allow', updatedInput: input };
+    if (!raw) {
+      // Grep/Glob with no path default to cwd. That is fine when cwd is one of
+      // the readable roots, but when this asker has no roots at all, cwd is
+      // whatever the process happens to be in -- the bot's own directory, which
+      // holds .env. Grep prints matching LINES, so allowing a pathless search
+      // there would hand over the tokens. Deny instead.
+      return roots.length
+        ? { behavior: 'allow', updatedInput: input }
+        : { behavior: 'deny', message: 'You have no directories this bot may read.' };
+    }
 
     const target = path.resolve(String(raw));
     if (!insideAny(target, roots)) {
@@ -101,8 +110,3 @@ export function makeGuard(cfg, readableRoots, allowedGithubTools) {
   };
 }
 
-export function allowedToolList(githubEnabled) {
-  return READ_ONLY_TOOLS.slice();
-}
-
-export { isSecret, insideAny };

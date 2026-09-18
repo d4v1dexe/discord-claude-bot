@@ -1,7 +1,7 @@
 {
   "name": "discord-claude-bot",
   "version": "1.0.0",
-  "description": "Discord bot powered by the Claude Agent SDK: answers when mentioned, reads your repos, runs on your Claude plan credit",
+  "description": "Discord bot on the Claude Agent SDK: answers when mentioned, reads your repos, opens PRs, runs on your Claude plan credit",
   "type": "module",
   "main": "bot.js",
   "scripts": {
@@ -10,7 +10,6 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.276",
-    "@anthropic-ai/sdk": "^0.126.0",
     "discord.js": "^14.27.0",
     "dotenv": "^18.0.0",
     "zod": "^4.6.5"

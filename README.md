@@ -6,10 +6,12 @@ monthly Agent SDK credit** rather than pay-as-you-go API billing.
 
 ## Features
 
-- **Speaks only when spoken to** — an @-mention, a reply to one of its messages, or a message
-  in a thread it opened. Never `@everyone`, never keyword triggers, never other bots.
+- **Speaks only when spoken to** — a mention of the bot user *or* of its own role, a reply to
+  one of its messages, or a message in a thread it opened. Never `@everyone`, never `@here`,
+  never keyword triggers, never other bots.
 - **Threads** — the first mention in a channel opens a thread, so long conversations don't
-  flood the channel. Inside the thread you don't need to tag it again.
+  flood the channel. Inside the thread you don't need to tag it again, and the conversation
+  survives a restart.
 - **Reads your repos** — real `Read`/`Grep`/`Glob`, fenced by an allowlist (see Security).
 - **Reads GitHub** — repos, files, code search, issues and PRs.
 - **Proposes changes on GitHub** — optional. Creates a branch, commits to it, opens a PR. It
@@ -43,11 +45,20 @@ Edit `.env` (Discord token; GitHub token only if you want GitHub tools) and `con
 login from Claude Code on the same machine. Sign in once:
 
 ```bash
-claude
+claude auth login
 ```
 
-If you see `OAuth session expired and could not be refreshed`, your login lapsed — run
-`claude` and sign in again.
+Check it took with `claude auth status` — it prints `"loggedIn": true` and your plan.
+
+For a bot that runs unattended, prefer a long-lived token instead, so an expiring
+interactive login can't kill it mid-conversation:
+
+```bash
+claude setup-token
+```
+
+Put the result in `.env` as `CLAUDE_CODE_OAUTH_TOKEN`. See Troubleshooting if you hit
+`OAuth session expired and could not be refreshed`.
 
 Eligible plans get a monthly Agent SDK credit (Pro $20, Max 5x $100, Max 20x $200) separate
 from your normal plan usage. Set `plan` in `config.json` so the bot can report what's left.
@@ -150,6 +161,113 @@ the bot to see — not "all repositories".
 
 Every change lands as a PR you review in GitHub's UI. The default-branch check fetches the
 repo's actual default branch and compares, so renaming `main` doesn't open a hole.
+
+## Troubleshooting
+
+Every entry below is something that actually broke while building this, with the symptom
+that pointed at it. Most of them fail *silently*, which is what makes them expensive.
+
+### The bot ignores me completely
+
+It answers three things and nothing else: a mention of the bot **user**, a mention of the
+bot's own **managed role**, a reply to one of its messages, and any message in a thread it
+opened. Anything else is dropped with no log line — deliberate in a busy channel, but it
+makes a bug look identical to sulking.
+
+Two traps here, both real:
+
+- **`@role` vs `@user`.** Discord renders `<@&123>` (role) and `<@123>` (user) identically —
+  both show as `@botname`. Only the user form used to register. Role mentions now work, but
+  only for `managed` roles the bot holds, so `@everyone`, `@here` and ordinary shared roles
+  still don't trigger it.
+- **Threads after a restart.** Thread sessions used to live only in memory. Restarting the
+  bot orphaned every open thread — messages in them were silently ignored forever. Threads
+  are now matched by `ownerId` and sessions persist to `sessions.json`.
+
+If it's still silent, check the console: `Triggers:` and `answers to @…` print at startup.
+
+### `Failed to authenticate: OAuth session expired and could not be refreshed`
+
+The Agent SDK uses Claude Code's login. Check it:
+
+```bash
+claude auth status
+```
+
+`"loggedIn": false` means there is no credential at all, not merely a stale one. Fix with
+`claude auth login`, or `claude setup-token` for a long-lived token that survives expiry —
+put that in `.env` as `CLAUDE_CODE_OAUTH_TOKEN`. For an unattended bot, prefer the token:
+an interactive login *will* lapse, and when it does the bot dies mid-conversation.
+
+### The bot starts but never reaches Claude, and `.env` looks fine
+
+`dotenv` parses `KEY=VALUE` lines. A file containing just a bare token — no `KEY=` prefix —
+is silently ignored, and every variable reads as unset. Verify without opening the file:
+
+```bash
+node -e "require('dotenv').config();console.log(Object.keys(process.env).filter(k=>/TOKEN|ANTHROPIC/.test(k)))"
+```
+
+Use `setup-env.ps1` rather than editing by hand; it writes the right shape.
+
+### "I gave the token write permission but it still can't push"
+
+Token permissions don't create tools. If `github.write` is `false`, the write tools are
+never registered, and no amount of GitHub-side permission changes that. Set
+`github.write: true` **and** give the token *Contents: Read and write* + *Pull requests:
+Read and write*. The startup banner prints whether GitHub tools are on.
+
+### Where is my plan's $20? The Console shows $0.00
+
+Two separate wallets, and this catches everyone:
+
+| | Claude plan credit | API credit |
+|---|---|---|
+| Used by | the Agent SDK (this build) | the Messages API (`raw-api` branch) |
+| Shown in | your Claude account | console.anthropic.com |
+| Costs | included in your subscription | money you add yourself |
+
+The plan's monthly Agent SDK credit **never appears in the Anthropic Console**, and the
+Messages API cannot spend it. The Console's "Organization credits" is the other wallet,
+starting at $0.00, and its "tier limit" is a spending ceiling — not a balance you have.
+
+### A reply costs way more than expected
+
+Most of the per-message cost is fixed overhead, not your question: the Agent SDK sends
+Claude Code's system prompt and tool definitions (~28k tokens) on every call. A cold cache
+costs ~2-4x a warm one, so sporadic questions cost far more each than a rapid back-and-forth.
+`claude-sonnet-5` runs about a third of `claude-opus-5`; the `raw-api` branch drops the
+overhead to ~1k tokens if volume matters more than the harness.
+
+### Security regressions worth knowing about
+
+Two holes existed in earlier versions of this code. Both passed their unit tests.
+
+- **`canUseTool` shadowed.** Listing `Read`/`Grep`/`Glob` in the SDK's `allowedTools`
+  auto-approves them *before* the permission callback runs, silently disabling every path
+  and secrets check. `allowedTools` must stay empty so calls fall through to the guard, and
+  `permissionPrompts` must be `'host'`, not `'none'`. The SDK warns about this via
+  `CLAUDE_SDK_CAN_USE_TOOL_SHADOWED` — do not ignore that warning.
+- **Pathless search.** `Grep`/`Glob` with no `path` default to the process cwd. For a user
+  with no readable roots, cwd was the bot's own directory — which holds `.env` — and Grep
+  prints matching *lines*. Pathless calls are now denied when the asker has no roots, and
+  cwd falls back to an empty scratch directory rather than the bot's folder.
+
+The lesson both times: testing the guard function directly proves nothing about whether the
+runtime actually calls it. Verify with a real request that should be refused.
+
+### Don't commit your secrets
+
+`config.json`, `.env`, `.env.*`, `usage.json` and `sessions.json` are gitignored. An earlier
+version wrote `.env` backups *next to* `.env`, where `.gitignore` didn't cover them, and one
+got committed with a live token inside. Backups now go to `LOCALAPPDATA`. Before publishing:
+
+```bash
+git ls-files
+```
+
+If anything token-shaped is in that list, purge it from history and revoke the token —
+deleting the file in a later commit does not remove it from history.
 
 ## Switching to the raw Messages API
 
