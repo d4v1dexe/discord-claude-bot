@@ -1,8 +1,25 @@
 # discord-claude-bot
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![Built with Claude Agent SDK](https://img.shields.io/badge/built%20with-Claude%20Agent%20SDK-8A63D2.svg)](https://code.claude.com/docs/en/agent-sdk)
+
 A Discord bot powered by the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk).
-It answers when you talk to it, can read your code, and runs on your **Claude plan's
-monthly Agent SDK credit** rather than pay-as-you-go API billing.
+Mention it and it answers — reading your local repos and your GitHub, opening pull requests,
+and looking at images you drop in.
+
+**It runs on your Claude subscription.** Pro, Max 5x and Max 20x plans include a monthly
+Agent SDK credit, so there is no API key to buy and no pay-as-you-go bill. About 180 messages
+a month on Pro at default settings; a [second build](#switching-to-the-raw-messages-api) on
+the `raw-api` branch trades that for pay-as-you-go if you want more volume.
+
+```text
+you    @claude what does send-message do in discordmcp?
+claude It sends a message to a channel by name or ID, resolving the channel via
+       findChannel() — src/index.ts:179. Note the `server` arg is parsed but never
+       passed through, so multi-guild bots always fail here.
+       ~$0.02 | today $0.49/$1.50 | $18.31 of monthly credit left (92%)
+```
 
 ## Features
 
@@ -271,6 +288,7 @@ If anything token-shaped is in that list, purge it from history and revoke the t
 deleting the file in a later commit does not remove it from history.
 
 ## Switching to the raw Messages API
+<a name="switching-to-the-raw-messages-api"></a>
 
 A second build lives on the **`raw-api`** branch. It drops the Agent SDK and calls the
 Messages API directly with a small hand-written tool set, so the per-call overhead falls
