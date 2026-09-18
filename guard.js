@@ -27,10 +27,6 @@ export const FORBIDDEN_TOOLS = [
   'SlashCommand',
 ];
 
-function normalizeRoots(cfg) {
-  return Object.values(cfg.repos || {}).map((p) => path.resolve(p));
-}
-
 function isSecret(fullPath, cfg) {
   const base = path.basename(fullPath).toLowerCase();
   const ext = path.extname(fullPath).toLowerCase();
@@ -56,12 +52,18 @@ function pathArg(toolName, input) {
 
 /**
  * Build the canUseTool callback.
- * @param {object} cfg        repoAccess config
- * @param {string[]} extraRoots  additional readable dirs (e.g. attachment scratch)
+ *
+ * IMPORTANT: whatever calls this must NOT also list these tools in the SDK's
+ * `allowedTools`. A bare name there auto-approves the tool before this callback
+ * runs, silently disabling every check below.
+ *
+ * @param {object} cfg  repoAccess config (denylists)
+ * @param {string[]} readableRoots  the COMPLETE set of directories readable for
+ *   this request. Pass repo roots only when the asker is allowlisted.
  * @param {boolean} githubEnabled
  */
-export function makeGuard(cfg, extraRoots, githubEnabled) {
-  const roots = normalizeRoots(cfg).concat((extraRoots || []).map((p) => path.resolve(p)));
+export function makeGuard(cfg, readableRoots, githubEnabled) {
+  const roots = (readableRoots || []).map((p) => path.resolve(p));
 
   return async function canUseTool(toolName, input) {
     if (FORBIDDEN_TOOLS.includes(toolName)) {

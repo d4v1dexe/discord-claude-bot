@@ -61,10 +61,12 @@ export async function runAgent(opts) {
   const repoPaths = repoAllowed ? Object.values(ra.repos || {}).map((p) => path.resolve(p)) : [];
   const readable = repoPaths.concat(extraRoots || []);
 
+  // NOTE: deliberately empty. A bare tool name in `allowedTools` auto-approves
+  // that tool BEFORE canUseTool is consulted (the SDK warns about this with
+  // CLAUDE_SDK_CAN_USE_TOOL_SHADOWED), which would silently disable every path
+  // and secrets check in guard.js. Leaving it empty makes each call fall
+  // through to the guard, which is the only thing deciding access here.
   const allowedTools = [];
-  if (repoAllowed) allowedTools.push(...READ_ONLY_TOOLS);
-  else if ((extraRoots || []).length) allowedTools.push('Read'); // attachments only
-  if (githubEnabled && repoAllowed) allowedTools.push(...GITHUB_TOOL_NAMES);
 
   const options = {
     model: cfg.model,
@@ -74,9 +76,13 @@ export async function runAgent(opts) {
     additionalDirectories: readable.slice(1),
     allowedTools,
     disallowedTools: FORBIDDEN_TOOLS,
-    canUseTool: makeGuard(ra, extraRoots || [], githubEnabled && repoAllowed),
+    // `readable` is the complete set of directories for this specific request --
+    // repo roots only when the asker is allowlisted, plus any attachment dir.
+    canUseTool: makeGuard(ra, readable, githubEnabled && repoAllowed),
     permissionMode: 'default',
-    permissionPrompts: 'none',
+    // 'host' routes decisions to canUseTool. 'none' would deny them outright,
+    // so the guard would never get to allow a legitimate read.
+    permissionPrompts: 'host',
     // Do not inherit the host machine's CLAUDE.md / settings: a bot should
     // behave the same wherever it is deployed.
     settingSources: [],
