@@ -13,13 +13,9 @@ Agent SDK credit, so there is no API key to buy and no pay-as-you-go bill. About
 a month on Pro at default settings; a [second build](#switching-to-the-raw-messages-api) on
 the `raw-api` branch trades that for pay-as-you-go if you want more volume.
 
-```text
-you    @claude what does send-message do in discordmcp?
-claude It sends a message to a channel by name or ID, resolving the channel via
-       findChannel() — src/index.ts:179. Note the `server` arg is parsed but never
-       passed through, so multi-guild bots always fail here.
-       ~$0.02 | today $0.49/$1.50 | $18.31 of monthly credit left (92%)
-```
+![Asking the bot about a repo](docs/demo-code-question.png)
+
+Every reply carries what it cost and what is left of your credit.
 
 ## Features
 
@@ -111,6 +107,11 @@ The bot hands Claude genuine file tools, so the guard matters. Every tool call g
 | User allowlist | Repo and GitHub tools attach only for `repoAccess.allowedUserIds`. Everyone else gets a bot with no file access at all. |
 | No host settings | `settingSources: []` — it will not inherit your `CLAUDE.md` or local Claude settings. |
 
+![A blocked read](docs/demo-guard.png)
+
+The last line is the point: the bot *attempted* the read and the guard refused it. A model
+declining on its own is not a security control — this is.
+
 **The allowlist is the whole security model.** Anyone on it can read any non-denied file in
 any configured repo, through Discord, and whatever they read lands in Discord's message
 history. Keep it to people you would hand a terminal to, and add repos deliberately.
@@ -136,6 +137,8 @@ Footer on every reply:
 Most of that is fixed overhead: the Agent SDK sends Claude Code's system prompt and tool
 definitions (~28k tokens) on every call. Your actual question is a rounding error beside it,
 which is why a short "hi" costs nearly as much as a real question.
+
+![The usage report](docs/demo-usage.png)
 
 `@bot usage` gives the full report. Costs are the Agent SDK's own estimate
 (`total_cost_usd`), not a billing statement. The "monthly credit left" figure assumes the
@@ -177,8 +180,16 @@ the bot to see — not "all repositories".
 | Commit files to that branch | Merge a PR |
 | Open a pull request | Force-push, delete branches, edit releases |
 
+![Opening a pull request from Discord](docs/demo-pull-request.png)
+
 Every change lands as a PR you review in GitHub's UI. The default-branch check fetches the
 repo's actual default branch and compares, so renaming `main` doesn't open a hole.
+
+### Attachments
+
+Drop in an image and ask about it:
+
+![Reading an attached screenshot](docs/demo-vision.png)
 
 ## Troubleshooting
 
