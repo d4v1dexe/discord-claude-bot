@@ -25,6 +25,10 @@ Write-Host ""
 
 $discord = Read-Secret "Discord bot token (required)" $true
 $github  = Read-Secret "GitHub token (optional, Enter to skip)" $false
+Write-Host ""
+Write-Host "Claude auth: skip this if you ran 'claude auth login' on this machine." -ForegroundColor DarkGray
+Write-Host "Paste a token from 'claude setup-token' only if the bot runs unattended." -ForegroundColor DarkGray
+$claude  = Read-Secret "Claude OAuth token (optional, Enter to skip)" $false
 
 if ($discord.Split('.').Count -ne 3) {
     Write-Host "Warning: that does not look like a Discord bot token (expected 3 dot-separated parts)." -ForegroundColor Yellow
@@ -46,16 +50,18 @@ $lines = @(
     "DISCORD_TOKEN=$discord"
 )
 if ($github) { $lines += "GITHUB_TOKEN=$github" } else { $lines += 'GITHUB_TOKEN=' }
-$lines += '# Leave blank to run on your Claude plan via your `claude` login.'
+$lines += '# Long-lived token from `claude setup-token`, for unattended runs on your plan.'
+if ($claude) { $lines += "CLAUDE_CODE_OAUTH_TOKEN=$claude" } else { $lines += 'CLAUDE_CODE_OAUTH_TOKEN=' }
+$lines += '# Setting this switches to pay-as-you-go API billing. Leave blank to use your plan.'
 $lines += 'ANTHROPIC_API_KEY='
 
 # UTF-8 without BOM: dotenv chokes on a BOM before the first key.
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllLines($envPath, $lines, $utf8NoBom)
 
-$discord = $null; $github = $null; [GC]::Collect()
+$discord = $null; $github = $null; $claude = $null; [GC]::Collect()
 
 Write-Host ""
 Write-Host "Wrote $envPath" -ForegroundColor Green
-Write-Host "Keys set: DISCORD_TOKEN, GITHUB_TOKEN, ANTHROPIC_API_KEY (blank)."
+Write-Host "Keys written: DISCORD_TOKEN, GITHUB_TOKEN, CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY."
 Write-Host ""
