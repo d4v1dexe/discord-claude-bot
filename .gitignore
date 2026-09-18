@@ -1,4 +1,6 @@
 node_modules/
 .env
+.env.*
+!.env.example
 usage.json
 config.json

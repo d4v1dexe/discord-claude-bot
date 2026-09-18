@@ -40,9 +40,13 @@ if ($github -and -not $github.StartsWith('github_pat_') -and -not $github.Starts
 }
 
 if (Test-Path $envPath) {
-    $backup = "$envPath.bak-" + (Get-Date -Format 'yyyy-MM-ddTHH-mm-ss')
+    # Backup goes OUTSIDE the repo: a .env.bak inside it can be committed by
+    # accident, and it holds the old secrets.
+    $backupDir = Join-Path $env:LOCALAPPDATA 'discord-claude-bot-backups'
+    New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+    $backup = Join-Path $backupDir ("env.bak-" + (Get-Date -Format 'yyyy-MM-ddTHH-mm-ss'))
     Copy-Item $envPath $backup
-    Write-Host "Backed up existing .env to $backup"
+    Write-Host "Backed up existing .env to $backup (outside the repo)"
 }
 
 $lines = @(
